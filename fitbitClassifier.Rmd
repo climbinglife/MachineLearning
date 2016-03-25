@@ -1,0 +1,86 @@
+---
+title: "Classification of Weight Lifting Exercise Manner"
+author: "Jincheng Wu"
+date: "March 23, 2016"
+output: html_document
+---
+
+Abstract: The fitbit weight lifting exercise dataset was loaded and preprocessed to remove NA and low variance variables. Subsequently, dataset was split into training (70%) and testing (30%) sets. Decision Tree, Support Vector Machine (SVM) and Random Forest models were built to classify different classes of lifting manner. Classification error was calculated based on testing data set. Finally, random forest model was used to predict the outcomes of 20 testing data.
+
+### Data loading and preprocessing
+First,  the data is loaded and preprocessed to remove varialbes with (1) too many NA values (>80%) and (2) near-zero variance varaibles.
+```{r}
+library(ggplot2)
+library(caret)
+rm(list=ls())
+setwd("C:/Coursera/Course project/Pratical Machine Learning")
+train.data <- read.csv("pml-training.csv", na.strings = c("NA","#DIV/0!",""))
+test.data  <- read.csv("pml-testing.csv",  na.strings = c("NA","#DIV/0!",""))
+train.data <- train.data[,-c(1)]
+test.data <- test.data[,-c(1)]
+
+# Find columns with a lot of NAs, > 80% of all observations
+nobs <- nrow(train.data)
+col.na <- which(sapply(train.data, function(x) sum(is.na(x)) >=   0.8 * nobs))
+train.data <- train.data[,-col.na]
+
+# Find near-zero variance columns
+col.lowvar <- nearZeroVar(train.data)
+train.data <- train.data[,-col.lowvar]
+
+# Have the same variables for testing data set
+lastcol <- test.data[,ncol(test.data)]
+test.data <- test.data[,colnames(train.data)[1:57]]
+test.data <- cbind(test.data, lastcol)
+
+for(i in 1:57) {
+    if(class(train.data[,i]) == "factor") {
+        test.data[,i] <- as.factor(test.data[,i])
+        levels(test.data[,i]) <- levels(train.data[,i])
+    }
+    else if(class(train.data[,i]) == "integer") {
+        test.data[,i] <- as.integer(test.data[,i])
+    }
+    else if(class(train.data[,i]) == "numeric") {
+        test.data[,i] <- as.numeric(test.data[,i])
+    }
+}
+```
+
+
+### Application of machine learning for classification (1. decision tree, 2. SVM, 3. Random Forest)
+```{r, warning=FALSE}
+library(caret)
+library(e1071)
+library(rpart)
+library(randomForest)
+inTrain = createDataPartition(train.data$classe, p = 0.7)[[1]]
+training = train.data[ inTrain,]
+testing = train.data[-inTrain,]
+# Use decision tree to classify the manner
+# 1. Decision Tree
+model.tree <- rpart(classe ~ ., data=training, method="class")
+test.fit <- predict(model.tree, testing, type="class")
+cm.tree <- confusionMatrix(test.fit, testing$classe)
+cm.tree 
+
+# 2. SVM
+model.svm <- svm(classe ~ ., data=train.data)
+test.fit <- predict(model.svm, testing, type="class")
+cm.svm <- confusionMatrix(test.fit, testing$classe)
+cm.svm
+
+# 3. Random Forest
+model.rf <- randomForest(classe ~., data=train.data)
+test.fit <- predict(model.rf, testing, type="class")
+cm.rf <- confusionMatrix(test.fit, testing$classe)
+cm.rf
+```
+
+
+Predict the outcomes of testing dataset using the best predictor (random forest)
+```{r, echo=FALSE}
+result <- predict(model.rf, test.data[,1:57], type = "class")
+result <- cbind(test.data[,58], result)
+write.table(result,file="result.txt",quote=FALSE,row.names=FALSE,col.names=FALSE)
+```
